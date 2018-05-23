@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bombeman - 2d multiplayer game</title>
+    <script src="lib/phaser.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <!--<script src="/phaser-list-view/phaser-list-view.js"></script>-->
+    <script src="js/Boot.js"></script>
+    <script src="js/Preload.js"></script>
+    <script src="js/Main.js"></script>
+    <script src="js/NewGame.js"></script>
+    <script src="js/LoadGame.js"></script>
+    <script src="js/Room.js"></script>
+    <script src="js/Game.js"></script>
+    <style>
+        body, html{
+            margin:0;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        const game = new Phaser.Game(480, 640, Phaser.AUTO, '');
+        game.state.add("Boot", Boot);
+        game.state.add("Preload", Preload);
+        game.state.add("Main", Main);
+        game.state.add("New Game", NewGame);
+        game.state.add("Load Game", LoadGame);
+        game.state.add("Room", Room);
+        game.state.add("Game", Game);
+        game.state.start("Boot");
+    </script>
+</body>
+</html>
