@@ -80,6 +80,7 @@ class Room{
         const x0 = [0, CELLS_ON_WIDTH - 1, CELLS_ON_WIDTH - 1, 0];
         const y0 = [0, 0, CELLS_ON_HEIGHT - 1, CELLS_ON_HEIGHT - 1];
         const BRICK_BROKE_SCORE = 10;
+        const PLAYER_KILL_SCORE = 100;
 
 
         this.name = name;
@@ -128,6 +129,7 @@ class Room{
         };
 
         this.collide = (player, speed) =>{
+            var res;
             var newPosition = new Point(
                 player.position.x + speed.x,
                 player.position.y + speed.y
@@ -135,7 +137,6 @@ class Room{
             var line = Math.floor(newPosition.y / CELL_WIDTH);
             var column = Math.floor(newPosition.x / CELL_WIDTH);
 
-            this.leavedBombPosition(player, line, column);
 
             if(line < 0 || line >= CELLS_ON_HEIGHT
                 || column < 0 || column >= CELLS_ON_WIDTH)
@@ -144,14 +145,21 @@ class Room{
                 player.lastBombPosition.y == line)  &&
                 this.playGround[line][column] != 0)
                 return true;
+
+            this.leavedBombPosition(player, line, column);
             return false;
         };
 
         this.placeBomb = (player, onExplode) =>{
             var bomb, playGround = this.playGround;
             var scores = this.scores;
+            var players = this.getPlayers();
             var onScoreChanged = this.onScoreChanged;
+            var onPlayerKilled = this.onPlayerKilled;
+            var onPlayerLoose = this.onPlayerLoose;
+            var onPlayerWon = this.onPlayerWon;
 
+            if(player.killed) return;
             if(player.crtBombs >= player.maxBombs) return undefined;
 
             var line = Math.floor(player.position.y / CELL_WIDTH);
@@ -181,9 +189,8 @@ class Room{
                 playGround[line][column] = 0;
 
                 places.push(new Point(
-                    column * CELL_WIDTH + jumaDeCellWidth,
-                    line * CELL_WIDTH + jumaDeCellWidth
-
+                    column ,
+                    line
                 ));
                 for(let index = 0; index < 4; index ++){
                     let shouldStop = false;
@@ -198,8 +205,8 @@ class Room{
                         if(playGround[newY][newX] == -2) shouldStop = true;
 
                         places.push(new Point(
-                            newX * CELL_WIDTH + jumaDeCellWidth,
-                            newY * CELL_WIDTH + jumaDeCellWidth
+                            newX,
+                            newY
                         ));
                         if(shouldStop){
                             brokenBlocks.push(new Point(newX, newY));
@@ -210,8 +217,56 @@ class Room{
                         }
                     }
                 }
+
+                for(let index in players){
+                    var cPlayer = players[index];
+                    if(cPlayer.killed) continue;
+
+                    var pLine = Math.floor(cPlayer.position.y / CELL_WIDTH);
+                    var pColumn = Math.floor(cPlayer.position.x / CELL_WIDTH);
+                    for(let index2 in places){
+                        var place = places[index2];
+                        if(place.x == pColumn && place.y == pLine){
+                            if(cPlayer.id != player.id){
+                                //it another player
+                                scores[player.id] += PLAYER_KILL_SCORE;
+                                scoreChanged = true;
+                                cPlayer.justKilled = true;
+                            }
+                            else{
+                                //autoKill
+                                cPlayer.justKilled = true;
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                places = places.map(function(item){return new Point(
+                    item.x * CELL_WIDTH + jumaDeCellWidth,
+                    item.y * CELL_WIDTH + jumaDeCellWidth
+                )});
                 onExplode(Object.assign({}, bomb, {fire:places, brokenBlocks:brokenBlocks}));
                 if(scoreChanged) onScoreChanged(scores);
+                let alive = 0;
+                let lastPlayer = undefined;
+                for(let index in players){
+                    var cPlayer = players[index];
+                    if(cPlayer.justKilled){
+                        onPlayerKilled(cPlayer);
+                        onPlayerLoose(cPlayer);
+                        cPlayer.justKilled = false;
+                        cPlayer.killed = true;
+                    }
+                    else if(!cPlayer.killed){
+                        alive += 1;
+                        lastPlayer = cPlayer;
+                    }
+                }
+                if(players.length > 1 && alive == 1){
+                    onPlayerWon(lastPlayer);
+                }
+
             }, 3000);
 
             return bomb;
@@ -266,6 +321,8 @@ class Room{
                 player.maxBombs = 1;
                 player.crtBombs = 0;
                 player.bombPower = 2;
+                player.killed = false;
+                player.justKilled = false;
             }
 
 
@@ -298,6 +355,15 @@ function createRoom(client){
 
     room.onScoreChanged = function(scores){
         emitToPlayers(room, 'scoreChanged', scores);
+    };
+    room.onPlayerKilled = function(player){
+        emitToPlayers(room, 'playerKilled', player);
+    };
+    room.onPlayerLoose = function(player){
+        clients[player.getClientSocketId()].emit('gameLost');
+    };
+    room.onPlayerWon = function(player){
+        clients[player.getClientSocketId()].emit('gameWon');
     };
 
     rooms[lastRoomId] = room;
